@@ -3,4 +3,3 @@ streamlit
 numpy
 pygame
 python-telegram-bot
-libgl1-mesa-glx
