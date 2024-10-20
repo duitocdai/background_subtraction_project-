@@ -8,7 +8,7 @@ import os
 
 # Khởi tạo âm thanh bằng pygame
 pygame.mixer.init()
-alert_sound = "C:\\internproject\\warning.mp3"  
+alert_sound = "warning.mp3"  
 
 # Thiết lập tiêu đề và giao diện
 st.title("Phát hiện đối tượng với Trừ nền (Background Subtraction)")
