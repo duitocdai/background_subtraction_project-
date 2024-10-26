@@ -104,10 +104,10 @@ else:
                                 cv2.putText(frame, "Inside Box", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
                                 if is_within_time_range(start_time, end_time):
-                                    if not sound_playing:  # Chỉ phát âm thanh nếu chưa phát
+                                    if not pygame.mixer.music.get_busy():  # Kiểm tra nếu âm thanh không đang phát
                                         pygame.mixer.music.load(alert_sound)
                                         pygame.mixer.music.play()
-                                        sound_playing = True  # Đánh dấu âm thanh đang phát
+                                        sound_playing = True
 
                                         if not notified:
                                             try:
@@ -123,7 +123,7 @@ else:
                                             try:
                                                 with open(screenshot_path, "rb") as f:
                                                     bot.sendPhoto(chat_id, f)  # Gửi ảnh chụp đến Telegram
-                                                os.remove(screenshot_path)
+                                                os.remove(screenshot_path )
                                                 st.success("Ảnh đã được gửi!")  # Phản hồi gửi ảnh
                                             except Exception as e:
                                                 st.error(f"Error sending photo: {e}")  # Hiển thị lỗi gửi ảnh nếu có
@@ -139,12 +139,6 @@ else:
                     else:
                         if sound_playing:
                             pygame.mixer.music.stop()  # Dừng âm thanh nếu không có chuyển động
-                            sound_playing = False
-
-                    # Nếu không có chuyển động hoặc không chồng lấp, dừng âm thanh
-                    if not motion_detected or not is_bbox_overlap(x, y, w, h, x1, y1, x2, y2):
-                        if sound_playing:
-                            pygame.mixer.music.stop()  # Dừng âm thanh
                             sound_playing = False
 
                     # Vẽ hộp phát hiện
