@@ -2,4 +2,4 @@ opencv-python
 streamlit
 numpy
 pygame
-python-telegram-bot
+telepot
