@@ -9,7 +9,7 @@ import time as time_module
 
 # Khởi tạo mixer pygame để phát âm thanh
 pygame.mixer.init(frequency=22050, size=-16, channels=2)
-alert_sound = "C:\\internproject\\warning.mp3"  # Đường dẫn đến tệp âm thanh cảnh báo
+alert_sound = "warning.mp3"  # Đường dẫn đến tệp âm thanh cảnh báo
 
 # Giao diện người dùng Streamlit
 st.title("Phát hiện đối tượng với Trừ nền (Background Subtraction)")
