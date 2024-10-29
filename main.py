@@ -7,7 +7,7 @@ import telepot
 import os
 import time as time_module
 
-# Khởi tạo mixer pygame để phát âm thanh
+# Khởi tạo pygame mixer để phát âm thanh
 pygame.mixer.init(frequency=22050, size=-16, channels=2)
 alert_sound = "C:\\internproject\\warning.mp3"  # Đường dẫn đến tệp âm thanh cảnh báo
 
@@ -25,9 +25,19 @@ if not chat_id:
 else:
     bot = telepot.Bot(token)  # Khởi tạo bot với token
 
-    # Điều khiển webcam
-    start_button = st.sidebar.button("Bắt đầu Webcam")
-    stop_button = st.sidebar.button("Dừng Webcam")
+    # Điều khiển nguồn video
+    source_option = st.sidebar.selectbox("Chọn nguồn video", ("Webcam", "Video File"))
+    video_file_path = None
+    if source_option == "Video File":
+        uploaded_file = st.sidebar.file_uploader("Chọn video", type=["mp4", "avi", "mov"])
+        if uploaded_file is not None:
+            video_file_path = os.path.join("temp_video.mp4")
+            with open(video_file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+    
+    # Điều khiển webcam hoặc video
+    start_button = st.sidebar.button("Bắt đầu")
+    stop_button = st.sidebar.button("Dừng")
     start_time = st.sidebar.slider("Thời gian bắt đầu", value=time_lib(8, 0), format="HH:mm")
     end_time = st.sidebar.slider("Thời gian kết thúc", value=time_lib(18, 0), format="HH:mm")
 
@@ -46,31 +56,30 @@ else:
     fgmask_placeholder = st.empty()
 
     def is_within_time_range(start_time, end_time):
-        """Kiểm tra xem thời gian hiện tại có trong khoảng thời gian không."""
         current_time = datetime.now().time()
         return start_time <= current_time <= end_time
 
     def is_bbox_overlap(x, y, w, h, x1, y1, x2, y2):
-        """Trả về True nếu các hộp bao quanh chồng lấp lên nhau."""
         return not (x > x2 or x + w < x1 or y > y2 or y + h < y1)
 
     if start_button:
-        cap = cv2.VideoCapture(0)  # Mở webcam
-
-        if not cap.isOpened():
-            st.error("Không thể mở webcam")
+        if source_option == "Webcam":
+            cap = cv2.VideoCapture(0)
         else:
-            st.sidebar.success("Webcam đã được bật!")
+            cap = cv2.VideoCapture(video_file_path) if video_file_path else None
+        
+        if cap is None or not cap.isOpened():
+            st.error("Không thể mở nguồn video")
+        else:
+            st.sidebar.success("Nguồn video đã được bật!")
             
-            sound_playing = False  # Theo dõi trạng thái âm thanh
-            notified = False  # Theo dõi trạng thái thông báo
+            sound_playing = False
 
-            # Ghi lại background trong 10 giây đầu tiên
             start_time_bg = time_module.time()
             while time_module.time() - start_time_bg < 10:
                 ret, frame = cap.read()
                 if not ret:
-                    st.error("Không thể đọc frame từ webcam")
+                    st.error("Không thể đọc frame từ video")
                     break
                 fgMask = backSub.apply(frame)
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -81,79 +90,64 @@ else:
                 while cap.isOpened():
                     ret, frame = cap.read()
                     if not ret:
-                        st.error("Không thể đọc frame từ webcam")
+                        st.error("Không thể đọc frame từ video")
                         break
                     
-                    # Áp dụng trừ nền
                     fgMask = backSub.apply(frame)
-                    
-                    # Tìm contours
                     contours, _ = cv2.findContours(fgMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
                     motion_detected = False
 
                     if contours:
                         largest_contour = max(contours, key=cv2.contourArea)
-                        if cv2.contourArea(largest_contour) > 500:  # Kiểm tra diện tích contour
+                        if cv2.contourArea(largest_contour) > 500:
                             x, y, w, h = cv2.boundingRect(largest_contour)
-                            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Vẽ hộp bao quanh
+                            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                             motion_detected = True
 
-                            # Kiểm tra chồng lấp với hộp thông báo
-                            if is_bbox_overlap(x, y, w, h, x1, y1, x2, y2):
-                                cv2.putText(frame, "Inside Box", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                            if is_bbox_overlap(x, y, w, h, x1, y1, x2, y2) and is_within_time_range(start_time, end_time):
+                                if not sound_playing:
+                                    pygame.mixer.music.load(alert_sound)
+                                    pygame.mixer.music.play()
+                                    sound_playing = True
 
-                                if is_within_time_range(start_time, end_time):
-                                    if not pygame.mixer.music.get_busy():  # Kiểm tra nếu âm thanh không đang phát
-                                        pygame.mixer.music.load(alert_sound)
-                                        pygame.mixer.music.play()
-                                        sound_playing = True
-
-                                        if not notified:
-                                            try:
-                                                bot.sendMessage(chat_id, "Phát hiện chuyển động trong hộp!")  # Gửi tin nhắn đến Telegram
-                                                notified = True  # Đánh dấu đã thông báo
-                                                st.success("Thông báo đã được gửi!")  # Phản hồi thông báo
-                                            except Exception as e:
-                                                st.error(f"Error sending message: {e}")  # Hiển thị lỗi nếu có
-                                            
-                                            # Lưu và gửi ảnh chụp
-                                            screenshot_path = "motion_detected.jpg"
-                                            cv2.imwrite(screenshot_path, frame)  # Lưu ảnh chụp
-                                            try:
-                                                with open(screenshot_path, "rb") as f:
-                                                    bot.sendPhoto(chat_id, f)  # Gửi ảnh chụp đến Telegram
-                                                os.remove(screenshot_path )
-                                                st.success("Ảnh đã được gửi!")  # Phản hồi gửi ảnh
-                                            except Exception as e:
-                                                st.error(f"Error sending photo: {e}")  # Hiển thị lỗi gửi ảnh nếu có
-                                            finally:
-                                                time_module.sleep(0.5)  # Đợi một chút trước khi xóa
-                                                if os.path.exists(screenshot_path):
-                                                    os.remove(screenshot_path)  # Xóa tệp ảnh
-                            else:
-                                notified = False
+                                try:
+                                    bot.sendMessage(chat_id, "Phát hiện chuyển động trong hộp!")
+                                    st.success("Thông báo đã được gửi!")
+                                except Exception as e:
+                                    st.error(f"Error sending message: {e}")
+                                
+                                screenshot_path = "motion_detected.jpg"
+                                cv2.imwrite(screenshot_path, frame)
+                                try:
+                                    with open(screenshot_path, "rb") as f:
+                                        bot.sendPhoto(chat_id, f)
+                                    os.remove(screenshot_path)
+                                    st.success("Ảnh đã được gửi!")
+                                except Exception as e:
+                                    st.error(f"Error sending photo: {e}")
                         else:
-                            notified = False
-                        
+                            if sound_playing:
+                                pygame.mixer.music.stop()
+                                sound_playing = False
                     else:
                         if sound_playing:
-                            pygame.mixer.music.stop()  # Dừng âm thanh nếu không có chuyển động
+                            pygame.mixer.music.stop()
                             sound_playing = False
 
-                    # Vẽ hộp phát hiện
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                    
-                    # Hiển thị video và mặt nạ
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame_placeholder.image(frame_rgb, channels="RGB", caption="Webcam Feed")
+                    frame_placeholder.image(frame_rgb, channels="RGB", caption="Video Feed")
                     fgmask_placeholder.image(fgMask, caption="Foreground Mask")
 
-                    # Dừng khi nhấn nút dừng
                     if stop_button:
-                        st.sidebar.success("Webcam đã được dừng!")
+                        st.sidebar.success("Nguồn video đã được dừng!")
                         break
 
             finally:
-                cap.release()  # Giải phóng webcam
-                pygame.mixer.quit()  # Dừng mixer pygame
+                cap.release()
+                pygame.mixer.quit()
+
+                # Xóa tệp video tạm sau khi hoàn tất
+                if video_file_path and os.path.exists(video_file_path):
+                    os.remove(video_file_path)
